@@ -1,0 +1,118 @@
+#include <Arduino.h>
+#include <Arduino_FreeRTOS.h>
+#include <Array.h>
+#include "Configuration.h"
+
+#include <SoftwareSerial.h>
+SoftwareSerial SerialDebug(2, 3);
+
+int frequency = 10;
+
+void taskCommandInterface(void* parameters);
+TaskHandle_t taskCommandInterfaceHandle = NULL;
+void taskLooper(void* parameters);
+TaskHandle_t taskLooperHandle = NULL;
+
+void setup() {
+    // NewPinConfiguration(2, ARRAY(PinFunction::readDigital, PinFunction::writeDigital))
+    // NewPinConfiguration(3, ARRAY(PinFunction::readDigital, PinFunction::writeDigital, PinFunction::writeAnalog))
+    NewPinConfiguration(4, ARRAY(PinFunction::readDigital, PinFunction::writeDigital))
+    NewPinConfiguration(5, ARRAY(PinFunction::readDigital, PinFunction::writeDigital, PinFunction::writeAnalog))
+    NewPinConfiguration(6, ARRAY(PinFunction::readDigital, PinFunction::writeDigital, PinFunction::writeAnalog))
+    NewPinConfiguration(7, ARRAY(PinFunction::readDigital, PinFunction::writeDigital))
+    NewPinConfiguration(8, ARRAY(PinFunction::readDigital, PinFunction::writeDigital))
+    NewPinConfiguration(9, ARRAY(PinFunction::readDigital, PinFunction::writeDigital, PinFunction::writeAnalog))
+    NewPinConfiguration(10, ARRAY(PinFunction::readDigital, PinFunction::writeDigital, PinFunction::writeAnalog))
+    NewPinConfiguration(11, ARRAY(PinFunction::readDigital, PinFunction::writeDigital, PinFunction::writeAnalog))
+    NewPinConfiguration(A0, ARRAY(PinFunction::readDigital, PinFunction::writeDigital, PinFunction::readAnalog))
+    NewPinConfiguration(A1, ARRAY(PinFunction::readDigital, PinFunction::writeDigital, PinFunction::readAnalog))
+    NewPinConfiguration(A2, ARRAY(PinFunction::readDigital, PinFunction::writeDigital, PinFunction::readAnalog))
+    NewPinConfiguration(A3, ARRAY(PinFunction::readDigital, PinFunction::writeDigital, PinFunction::readAnalog))
+    NewPinConfiguration(A4, ARRAY(PinFunction::readDigital, PinFunction::writeDigital, PinFunction::readAnalog))
+    NewPinConfiguration(A5, ARRAY(PinFunction::readDigital, PinFunction::writeDigital, PinFunction::readAnalog))
+    
+    Serial.begin(115200);
+    SerialDebug.begin(115200);
+    Serial.println("Debug Start");
+    
+    xTaskCreate(taskCommandInterface, "Command Interface", 1000, NULL, 1, &taskCommandInterfaceHandle);
+    xTaskCreate(taskLooper, "Looper", 1000, NULL, 1, &taskLooperHandle);
+	vTaskStartScheduler();
+    vTaskSuspend(taskLooperHandle);
+}
+
+void loop() { }
+
+// FreeRTOS Tasks
+
+void taskCommandInterface(void* parameters) {
+    while (true) {
+        if (Serial.available() > 0) {
+            uint8_t command = Serial.read();
+             SerialDebug.print("Received command: ");
+             SerialDebug.println(command);
+            switch (command) {
+            case Command::functionMap:
+                Serial.print(Response::ok);
+                SerialDebug.println("Function Map");
+                break;
+            case Command::getPinFunction:
+                Serial.print(Response::ok);
+                SerialDebug.println("Function Map");
+                break;
+            case Command::setPinFunction:
+                Serial.print(Response::ok);
+                SerialDebug.println("Function Map");
+                break;
+            case Command::startLoop:
+                vTaskResume(taskLooperHandle);
+                Serial.print(Response::ok);
+                SerialDebug.println("Start Loop");
+                break;
+            default:
+                Serial.print(Response::error);
+                SerialDebug.print("Error");
+                break;
+            }
+        }
+    }
+}
+
+void taskLooper(void* parameters) {
+    while (true) {
+        for(int i = 0; i < PinConfigurations.count(); i++) {
+            switch (PinConfigurations[i].selectedFunction) {
+                case PinFunction::readDigital:
+                    SerialDebug.println("read digital");
+                    break;
+                case PinFunction::writeDigital:
+                    SerialDebug.println("write digital");
+                    break;
+                case PinFunction::readAnalog:
+                    SerialDebug.println("write digital");
+                    break;
+                case PinFunction::writeAnalog:
+                    SerialDebug.println("write digital");
+                    break;
+            }
+        }
+        
+        if (Serial.available() > 0) {
+            uint8_t command = Serial.read();
+            switch (command) {
+            case Command::stopLoop:
+                vTaskSuspend(taskLooperHandle);
+                vTaskResume(taskCommandInterfaceHandle);
+                Serial.print(Response::ok);
+                SerialDebug.println("Stop Loop");
+            default:
+                Serial.print(Response::error);
+                SerialDebug.println("Error");
+                break;
+            }
+        }
+
+        // delay depending on capture Hz
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+    }
+}
